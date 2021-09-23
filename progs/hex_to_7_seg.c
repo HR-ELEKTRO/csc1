@@ -1,0 +1,19 @@
+int hex_to_7_seg(int hex_digit) {
+	if (hex_digit == 0x0) return 0x40;
+	if (hex_digit == 0x1) return 0x79;
+	if (hex_digit == 0x2) return 0x24;
+	if (hex_digit == 0x3) return 0x30;
+	if (hex_digit == 0x4) return 0x19;
+	if (hex_digit == 0x5) return 0x12;
+	if (hex_digit == 0x6) return 0x02;
+	if (hex_digit == 0x7) return 0x78;
+	if (hex_digit == 0x8) return 0x00;
+	if (hex_digit == 0x9) return 0x18;
+	if (hex_digit == 0xA) return 0x08;
+	if (hex_digit == 0xB) return 0x03;
+	if (hex_digit == 0xC) return 0x46;
+	if (hex_digit == 0xD) return 0x21;
+	if (hex_digit == 0xE) return 0x06;
+	if (hex_digit == 0xF) return 0x0E;
+    return 0x7F;
+}
