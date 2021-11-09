@@ -102,9 +102,11 @@ of the Linux kernel.  One typically executes sopc2dts as follows:
 <val type="number">0</val>
 <val type="number">3</val>
 </DTAppend>
+<!--
 <DTAppend name="slot@0" type="node" parentlabel="hps_0_sdmmc" newlabel="slot_0"/>
 <DTAppend name="reg" type="number" parentlabel="slot_0" val="0"/>
 <DTAppend name="bus-width" type="number" parentlabel="slot_0" val="4"/>
+-->
 
 <DTAppend name="master-ref-clk" type="number" parentlabel="hps_0_qspi" val="400000000"/>
 <DTAppend name="ext-decoder" type="number" parentlabel="hps_0_qspi" val="0"/>
@@ -140,6 +142,7 @@ of the Linux kernel.  One typically executes sopc2dts as follows:
 <DTAppend name="status" type="string" parentlabel="hps_0_spi0" val="disabled"/>
 <DTAppend name="status" type="string" parentlabel="hps_0_spi1" val="disabled"/>
 
+<!--
 <DTAppend name="spidev@0" type="node" parentlabel="hps_0_spi0" newlabel="spidev0"/>
 <DTAppend name="compatible" type="string" parentlabel="spidev0" val="spidev"/>
 <DTAppend name="reg" type="number" parentlabel="spidev0" val="0"/>
@@ -151,6 +154,7 @@ of the Linux kernel.  One typically executes sopc2dts as follows:
 <DTAppend name="reg" type="number" parentlabel="spidev1" val="0"/>
 <DTAppend name="spi-max-frequency" type="number" parentlabel="spidev1" val="100000000"/>
 <DTAppend name="enable-dma" type="number" parentlabel="spidev1" val="1"/>
+-->
 
 <DTAppend name="leds" type="node" parentlabel="sopc0" newlabel="soc_leds"/>
 <DTAppend name="compatible" type="string" parentlabel="soc_leds" val="gpio-leds"/>
@@ -160,10 +164,12 @@ of the Linux kernel.  One typically executes sopc2dts as follows:
 <DTAppend name="hps2" type="node" parentlabel="soc_leds" newlabel="led_hps2"/>
 <DTAppend name="hps3" type="node" parentlabel="soc_leds" newlabel="led_hps3"/>
 
+<!--
 <DTAppend name="fpga0" type="node" parentlabel="soc_leds" newlabel="led_fpga0"/>
 <DTAppend name="fpga1" type="node" parentlabel="soc_leds" newlabel="led_fpga1"/>
 <DTAppend name="fpga2" type="node" parentlabel="soc_leds" newlabel="led_fpga2"/>
 <DTAppend name="fpga3" type="node" parentlabel="soc_leds" newlabel="led_fpga3"/>
+-->
 
 <DTAppend name="label" type="string" parentlabel="led_hps0" val="hps_led0"/>
 <DTAppend name="gpios" parentlabel="led_hps0" >
@@ -192,7 +198,7 @@ of the Linux kernel.  One typically executes sopc2dts as follows:
 <val type="number">12</val>
 <val type="number">1</val>
 </DTAppend>
-
+<!--
 <DTAppend name="label" type="string" parentlabel="led_fpga0" val="fpga_led0"/>
 <DTAppend name="gpios" parentlabel="led_fpga0" >
 <val type="phandle">led_pio</val>
@@ -249,7 +255,8 @@ of the Linux kernel.  One typically executes sopc2dts as follows:
 <val type="hex">0xff119000</val>
 <val type="hex">0x100</val>
 </DTAppend>
-
+-->
+<!--
 <DTAppend name="fpgabridge@0" type="node" parentlabel="sopc0" newlabel="fpgabridge0"/>
 <DTAppend name="compatible" type="string" parentlabel="fpgabridge0" val="altr,socfpga-hps2fpga-bridge"/>
 <DTAppend name="label" type="string" parentlabel="fpgabridge0" val="hps2fpga"/>
@@ -264,6 +271,7 @@ of the Linux kernel.  One typically executes sopc2dts as follows:
 <DTAppend name="compatible" type="string" parentlabel="fpgabridge2" val="altr,socfpga-fpga2hps-bridge"/>
 <DTAppend name="label" type="string" parentlabel="fpgabridge2" val="fpga2hps"/>
 <DTAppend name="clocks" type="phandle" parentlabel="fpgabridge2" val="l4_main_clk"/>
+-->
 
 <DTAppend name="l3regs@0xff800000" type="node" parentlabel="sopc0" newlabel="l3regs"/>
 <DTAppend name="compatible"  parentlabel="l3regs" >
