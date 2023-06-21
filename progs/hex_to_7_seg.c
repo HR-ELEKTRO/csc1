@@ -8,7 +8,7 @@ int hex_to_7_seg(int hex_digit) {
 	if (hex_digit == 0x6) return 0x02;
 	if (hex_digit == 0x7) return 0x78;
 	if (hex_digit == 0x8) return 0x00;
-	if (hex_digit == 0x9) return 0x18;
+	if (hex_digit == 0x9) return 0x10;
 	if (hex_digit == 0xA) return 0x08;
 	if (hex_digit == 0xB) return 0x03;
 	if (hex_digit == 0xC) return 0x46;
