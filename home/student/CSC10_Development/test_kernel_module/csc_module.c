@@ -7,73 +7,78 @@
 #include <linux/io.h>
 #include <linux/of.h>
 
-MODULE_LICENSE("GPL");
-
 #define HW_REGS_BASE 0xff200000
 #define HW_REGS_SPAN 0x00200000
 #define HW_REGS_MASK ( HW_REGS_SPAN - 1 )
 #define LED_PIO_BASE 0x10
 #define SW_BASE 0x00
 
-#define DEVNAME "Mijn Module"
+#define DEVNAME "PIO Interrupt Handler"
 
-void * LW_virtual; // Lightweight bridge base address
-volatile int *LEDR_ptr; // virtual addresses
-volatile int *SW_ptr;
+// lightweight bridge base address
+static void *LW_virtual;
+// virtual address of leds PIO
+static volatile unsigned int *LEDR_ptr;
+// virtual address of switches PIO
+static volatile unsigned int *SW_ptr;
+// irq number for switches PIO
+static int irq_number;
 
-irq_handler_t irq_handler (int irq, void *dev_id, struct pt_regs * regs)
+irq_handler_t irq_handler (int irq, void *dev_id)
 {
 	*(SW_ptr + 3) = 0xF;
 
-	printk(KERN_ALERT "In de IRQ!");
-	return (irq_handler_t) IRQ_HANDLED;
+	printk(KERN_INFO DEVNAME "IRQ called!\n");
+	return IRQ_HANDLED;
 }
 
-static int init_handler(struct platform_device * pdev)
+static int init_handler(struct platform_device *pdev)
 {
-	int irq_num,ret;
-
-	//Koppel fysiek geheugenbereik aan pointer
+	// map the lightweight bridge into virtual memory
 	LW_virtual = ioremap(HW_REGS_BASE, HW_REGS_SPAN);
+	if (LW_virtual == NULL) {
+		printk(KERN_ALERT DEVNAME "ERROR: ioremap failed\n");
+		return -EINVAL;
+	}
 
-	LEDR_ptr = LW_virtual + LED_PIO_BASE; //offset naar PIO registers
+	LEDR_ptr = LW_virtual + LED_PIO_BASE; 
 	SW_ptr = LW_virtual + SW_BASE;
-	*LEDR_ptr = 0xFF; //Alle leds aanzetten
+	// switch all LEDs on
+	*LEDR_ptr = 0xFF;
 
 	*(SW_ptr + 3) = 0xF;
 	*(SW_ptr + 2) = 0xF;
 
-	irq_num = platform_get_irq(pdev,0);
-	printk(KERN_ALERT DEVNAME ": IRQ %d wordt geregistreert!\n", irq_num);
+	irq_number = platform_get_irq(pdev, 0);
+	printk(KERN_INFO DEVNAME ": IRQ %d is being registered!\n", irq_number);
 
-	ret = request_irq(irq_num, (irq_handler_t) irq_handler, 0, DEVNAME, NULL);
-
-	return ret;
+	int err = request_irq(irq_number, irq_handler, 0, DEVNAME, NULL);
+	if (err != 0) {
+		printk(KERN_ALERT DEVNAME "ERROR: IRQ %d can not be registered\n", irq_number);
+	}
+	return err;
 }
-static int  clean_handler(struct platform_device *pdev)
+static int clean_handler(struct platform_device *pdev)
 {
-	int irq_num;
-	irq_num=platform_get_irq(pdev,0);
-	printk(KERN_ALERT DEVNAME ": IRQ %d wordt vrijgegeven!\n", irq_num);
+	printk(KERN_INFO DEVNAME ": IRQ %d is being unregistered!\n", irq_number);
 
-	*LEDR_ptr = 0; // Alle leds uitzettten
-	iounmap (LW_virtual); //mapping ongedaan maken
+	// switch all LEDs off
+	*LEDR_ptr = 0;
+	// unmap the LW bridge 
+	iounmap(LW_virtual);
+	// unregister the IRQ
 	free_irq(irq_num, NULL);
 	return 0;
 }
 
-
-/*
-* Hierin beschrijven we welk device we willen koppelen
-* aan onze module. Deze moet in de device-tree overeen-
-* komen! 
-*/
+// describe which device we want to bind to this kernel module
+// this must match an entry in the device tree
 static const struct of_device_id mijn_module_id[] ={
 	{.compatible = "altr,switches"},
 	{}
 };
 
-//handlers e.d. koppelen
+// platform driver structure linking handlers to events
 static struct platform_driver mijn_module_driver = {
 	.driver = {
 	 	.name = DEVNAME,
@@ -84,5 +89,9 @@ static struct platform_driver mijn_module_driver = {
 	.remove = clean_handler
 };
 
-//module registreren
+// register this platform driver
 module_platform_driver(mijn_module_driver);
+
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("Daniël Versluis, Harry Broeders");
+MODULE_DESCRIPTION("Kernel module to handle PIO interrupt from DE1-SoC board");
