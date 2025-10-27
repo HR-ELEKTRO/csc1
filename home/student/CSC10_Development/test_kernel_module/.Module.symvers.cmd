@@ -1,1 +1,0 @@
-cmd_/home/student/CSC10_Development/test_kernel_module/Module.symvers := sed 's/ko$$/o/' /home/student/CSC10_Development/test_kernel_module/modules.order | scripts/mod/modpost     -o /home/student/CSC10_Development/test_kernel_module/Module.symvers -e -i Module.symvers   -T -

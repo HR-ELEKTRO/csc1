@@ -1,1 +1,0 @@
-cmd_/home/student/CSC10_Development/test_kernel_module/csc_module.mod := { echo  /home/student/CSC10_Development/test_kernel_module/csc_module.o; echo; } > /home/student/CSC10_Development/test_kernel_module/csc_module.mod
