@@ -1,80 +1,65 @@
-#include <linux/kernel.h>
-#include <linux/module.h>
-#include <linux/init.h>
 #include <linux/interrupt.h>
 #include <linux/platform_device.h>
-#include <linux/sched.h>
-#include <linux/io.h>
 #include <linux/of.h>
-
-#define HW_REGS_BASE 0xff200000
-#define HW_REGS_SPAN 0x00200000
-#define HW_REGS_MASK ( HW_REGS_SPAN - 1 )
-#define LED_PIO_BASE 0x10
-#define SW_BASE 0x00
 
 #define DEVNAME "PIO Interrupt Handler"
 
-// lightweight bridge base address
-static void *LW_virtual;
-// virtual address of leds PIO
-static volatile unsigned int *LEDR_ptr;
-// virtual address of switches PIO
-static volatile unsigned int *SW_ptr;
+// pointer to PIO device registers
+static volatile unsigned int *PIO_ptr;
 // irq number for switches PIO
 static int irq_number;
 
-irq_handler_t irq_handler (int irq, void *dev_id)
+irqreturn_t irq_handler(int irq, void *dev_id)
 {
-	*(SW_ptr + 3) = 0xF;
+	*(PIO_ptr + 3) = 0xF;
 
-	printk(KERN_INFO DEVNAME "IRQ called!\n");
+	static int count = 0;
+	count++;
+
+	printk(KERN_INFO DEVNAME ": IRQ called %d time(s)!\n", count);
 	return IRQ_HANDLED;
 }
 
 static int init_handler(struct platform_device *pdev)
 {
-	// map the lightweight bridge into virtual memory
-	LW_virtual = ioremap(HW_REGS_BASE, HW_REGS_SPAN);
-	if (LW_virtual == NULL) {
-		printk(KERN_ALERT DEVNAME "ERROR: ioremap failed\n");
-		return -EINVAL;
+	// map the PIO device registers into virtual memory
+	void *mem_ptr = devm_platform_ioremap_resource(pdev, 0);
+	if (IS_ERR(mem_ptr)) {
+		printk(KERN_ALERT DEVNAME ": ERROR: no base address found for PIO device\n");
+		return PTR_ERR(mem_ptr);
 	}
-
-	LEDR_ptr = LW_virtual + LED_PIO_BASE; 
-	SW_ptr = LW_virtual + SW_BASE;
-	// switch all LEDs on
-	*LEDR_ptr = 0xFF;
-
-	*(SW_ptr + 3) = 0xF;
-	*(SW_ptr + 2) = 0xF;
-
+	PIO_ptr = mem_ptr;
+	// get the irq number of the PIO device
 	irq_number = platform_get_irq(pdev, 0);
+	if (irq_number < 0) {
+		printk(KERN_ALERT DEVNAME ": ERROR: No IRQ number found for PIO device\n");
+		return irq_number;
+	}
 	printk(KERN_INFO DEVNAME ": IRQ %d is being registered!\n", irq_number);
-
+	// register irq handler
 	int err = request_irq(irq_number, irq_handler, 0, DEVNAME, NULL);
 	if (err != 0) {
-		printk(KERN_ALERT DEVNAME "ERROR: IRQ %d can not be registered\n", irq_number);
+		printk(KERN_ALERT DEVNAME ": ERROR: IRQ %d can not be registered\n", irq_number);
 	}
+
+	*(PIO_ptr + 3) = 0x0F;
+	*(PIO_ptr + 2) = 0x0F;
+
 	return err;
 }
-static int clean_handler(struct platform_device *pdev)
+static void clean_handler(struct platform_device *pdev)
 {
 	printk(KERN_INFO DEVNAME ": IRQ %d is being unregistered!\n", irq_number);
-
-	// switch all LEDs off
-	*LEDR_ptr = 0;
-	// unmap the LW bridge 
-	iounmap(LW_virtual);
 	// unregister the IRQ
-	free_irq(irq_num, NULL);
-	return 0;
+	if (free_irq(irq_number, NULL) == NULL) {
+		printk(KERN_ALERT DEVNAME ": ERROR: IRQ %d can not be unregistered\n", irq_number);
+	}
 }
 
 // describe which device we want to bind to this kernel module
 // this must match an entry in the device tree
 static const struct of_device_id mijn_module_id[] ={
-	{.compatible = "altr,switches"},
+	{.compatible = "switches"},
 	{}
 };
 
@@ -86,7 +71,8 @@ static struct platform_driver mijn_module_driver = {
 		.of_match_table = of_match_ptr(mijn_module_id),
 	},
 	.probe = init_handler,
-	.remove = clean_handler
+	// See https://elixir.bootlin.com/linux/v6.6.22/source/include/linux/platform_device.h#L236 for an explanation why we use .remove_new in stead of .remove
+	.remove_new = clean_handler
 };
 
 // register this platform driver
