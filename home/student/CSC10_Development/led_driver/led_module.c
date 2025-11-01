@@ -16,12 +16,12 @@ static dev_t dev = 0;
 static int dev_major = 0;
 
 // device class structure
-static struct class *myleddev_class = NULL;
+static struct class *my_dev_class = NULL;
 
 // char device structure
-static struct cdev myleddev_cdev;
+static struct cdev my_dev_cdev;
 
-static int myleddev_open(struct inode *inode, struct file *file) 
+static int my_dev_open(struct inode *inode, struct file *file) 
 {
 	printk(KERN_INFO DEVNAME ": Device open\n");
 	if ((file->f_flags & O_WRONLY) != O_WRONLY) {
@@ -31,13 +31,13 @@ static int myleddev_open(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static int myleddev_release(struct inode *inode, struct file *file)
+static int my_dev_release(struct inode *inode, struct file *file)
 {
 	printk(KERN_INFO DEVNAME ": Device close\n");
 	return 0;
 }
 
-static ssize_t myleddev_write(struct file *file, const char __user *buf, size_t count, loff_t *offset)
+static ssize_t my_dev_write(struct file *file, const char __user *buf, size_t count, loff_t *offset)
 {
 	char buffer[128];
 	size_t maxdatalen = sizeof buffer;
@@ -64,15 +64,15 @@ static ssize_t myleddev_write(struct file *file, const char __user *buf, size_t 
 }
 
 // initialize file_operations
-static const struct file_operations myleddev_fops = {
-	.open = myleddev_open,
-	.release = myleddev_release,
-	.write = myleddev_write
+static const struct file_operations my_dev_fops = {
+	.open = my_dev_open,
+	.release = my_dev_release,
+	.write = my_dev_write
 };
 
 // callback function called when device is added to class
 // used to set the permissions of the device node to 0666 (read and write for all users)
-static int myleddev_uevent(const struct device *dev, struct kobj_uevent_env *env)
+static int my_dev_uevent(const struct device *dev, struct kobj_uevent_env *env)
 {
 	int ret = add_uevent_var(env, "DEVMODE=%#o", 0666);
 	if (ret < 0) {
@@ -99,57 +99,63 @@ static int init_handler(struct platform_device *pdev)
 
 	// create device class
 	// class leds is a reserved class name and can not be used. Therefore we use my_leds
-	myleddev_class = class_create("my_leds");
+	my_dev_class = class_create("my_leds");
 
-	if (IS_ERR(myleddev_class)) {
+	if (IS_ERR(my_dev_class)) {
 		printk(KERN_ALERT DEVNAME ": ERROR: class can not be created for device\n");
-		return PTR_ERR(myleddev_class);
+		err = PTR_ERR(my_dev_class);
+		goto cleanup_chrdev_region;
 	}
-	// myleddev_uevent is called when a device is added to this class
-	myleddev_class->dev_uevent = myleddev_uevent;
+	// my_dev_uevent is called when a device is added to this class
+	my_dev_class->dev_uevent = my_dev_uevent;
 
 	// init new device
-	cdev_init(&myleddev_cdev, &myleddev_fops);
-	myleddev_cdev.owner = THIS_MODULE;
+	cdev_init(&my_dev_cdev, &my_dev_fops);
+	my_dev_cdev.owner = THIS_MODULE;
 
 	// create device in /sys/devices/virtual/my_leds/leds
-	err = cdev_add(&myleddev_cdev, MKDEV(dev_major, 0), 1);
+	err = cdev_add(&my_dev_cdev, MKDEV(dev_major, 0), 1);
 	if (err < 0) {
 		printk(KERN_ALERT DEVNAME ": ERROR: device number can not be added for device\n");
-		return err;
+		goto cleanup_class;
 	}
 
 	// create device node /dev/leds
-	struct device *myleddev = device_create(myleddev_class, NULL, MKDEV(dev_major, 0), NULL, "leds");
-	if (IS_ERR(myleddev)) {
+	struct device *my_dev = device_create(my_dev_class, NULL, MKDEV(dev_major, 0), NULL, "leds");
+	if (IS_ERR(my_dev)) {
 		printk(KERN_ALERT DEVNAME ": ERROR: device can not be created for driver\n");
-		return PTR_ERR(myleddev);
+		err = PTR_ERR(my_dev);
+		goto cleanup_cdev;
 	}
 
-	// get the lightweight bridge node from the device tree
-	struct device_node *device_tree_node = of_find_node_by_name(NULL, "bridge");
-	if (device_tree_node == NULL) {
-		printk(KERN_ALERT DEVNAME ": ERROR: device tree node: bridge is not found in the device tree\n");
-		return -EINVAL;
-	}
 	// map the PIO device registers into virtual memory
 	void *mem_ptr = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(mem_ptr)) {
-		printk(KERN_ALERT DEVNAME ": : ERROR: no base address found for PIO device\n");
-		return PTR_ERR(mem_ptr);
+		printk(KERN_ALERT DEVNAME ": ERROR: no base address found for PIO device\n");
+		err = PTR_ERR(mem_ptr);
+		goto cleanup_device;
 	}
 	PIO_ptr = mem_ptr;
-
 	return 0;
+	// cleanup on errors
+cleanup_device:	
+	device_destroy(my_dev_class, MKDEV(dev_major, 0));
+cleanup_cdev:
+	cdev_del(&my_dev_cdev);
+cleanup_class:
+	class_destroy(my_dev_class);
+cleanup_chrdev_region:
+	unregister_chrdev_region(dev, 1);
+	return err;
 }
 
 static void clean_handler(struct platform_device *pdev)
 {
 	printk(KERN_INFO DEVNAME ": Destroy character device\n");
 
-	device_destroy(myleddev_class, MKDEV(dev_major, 0));
-	class_destroy(myleddev_class);
-	cdev_del(&myleddev_cdev);
+	device_destroy(my_dev_class, MKDEV(dev_major, 0));
+	cdev_del(&my_dev_cdev);
+	class_destroy(my_dev_class);
 	unregister_chrdev_region(dev, 1);
 }
 
