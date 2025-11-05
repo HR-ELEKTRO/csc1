@@ -1,30 +1,34 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <sys/ioctl.h>
 #include <signal.h>
  
 static volatile int klaar = 0;
 
 // Handler voor SIGINT wordt aangeroepen bij indrukken ctrl-c
-void ctrl_c_handler(int)
+void ctrl_c_handler(int signum)
 {
 	klaar = 1;
-	printf("\nSignaal SIGINT ontvangen\n");
+	printf("\nSignaal %d (SIGINT) ontvangen\n", signum);
 }
 
-// globale file descriptor
+// Globale file descriptor
 static int fd = -1;
 
 // Handler voor SIGIO wordt aangeroepen bij interrupt op switches (opgaande flank)
-void sigio_handler(int n) 
+void sigio_handler(int signum) 
 {
-	printf("Signaal SIGIO ontvangen\n");
-	// Vul hier de code in om de switch status te lezen en af te drukken
+	printf("Signaal %d (SIGIO) ontvangen\n", signum);
+
+	if(fd < 0) {
+		fprintf(stderr, "ERROR: Device is not open\n");
+	}
+	else {
+		int buf;
+		read(fd, &buf, 1);
+		printf("switches = 0x%02X\n", buf);
+	}
 }
  
 int main()
@@ -32,22 +36,34 @@ int main()
 	struct sigaction actie;
  
 	// Handler voor SIGIO registreren
-	sigemptyset(&actie.sa_mask);
+	if (sigemptyset(&actie.sa_mask) < 0) {
+		perror("sigemptyset");
+		exit(EXIT_FAILURE);
+	}
 	actie.sa_flags = (SA_RESTART);
 	actie.sa_handler = sigio_handler; //pointer naar signal routine
-	sigaction(SIGIO, &actie, NULL);
+	if (sigaction(SIGIO, &actie, NULL) < 0) {
+		perror("sigaction");
+		return EXIT_FAILURE;
+	}
 
 	// Handler voor SIGINT registreren
-	sigemptyset(&actie.sa_mask);
+	if (sigemptyset(&actie.sa_mask) < 0) {
+		perror("sigemptyset");
+		return EXIT_FAILURE;
+	}
 	actie.sa_flags = (SA_RESETHAND);
 	actie.sa_handler = ctrl_c_handler;
-	sigaction(SIGINT, &actie, NULL);
- 
+	if (sigaction(SIGINT, &actie, NULL) < 0) {
+		perror("sigaction");
+		return EXIT_FAILURE;
+	}
+
 	// Device openen
 	fd = open("/dev/async_switches", O_RDONLY);
 	if(fd < 0) {
 		perror("open");
-		return 0;
+		return EXIT_FAILURE;
 	}
  
 	printf("Applicatie registreren voor SIGIO bij device\n");
@@ -55,24 +71,26 @@ int main()
 	if (fcntl(fd, F_SETOWN, getpid()) < 0) {
 		perror("fcntl");
 		close(fd);
-		exit(EXIT_FAILURE);
+		return EXIT_FAILURE;
 	}
 	// Enable asynchronous notification zodat device signal SIGIO stuurt bij interrupt
 	int flags = fcntl(fd, F_GETFL);
 	if (flags < 0) {
 		perror("fcntl");
-		exit(EXIT_FAILURE);
+		close(fd);
+		return EXIT_FAILURE;
 	}
 	if (fcntl(fd, F_SETFL, flags | FASYNC) < 0) {
 		perror("fcntl");
-		exit(EXIT_FAILURE);
+		close(fd);
+		return EXIT_FAILURE;
 	}
 
 	printf("Wacht op signaal...\n");
 	while (!klaar);
 
-	// device sluiten
+	// Device sluiten
 	close(fd);
 
-	exit(EXIT_SUCCESS);
+	return EXIT_SUCCESS;
 }
