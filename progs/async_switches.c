@@ -3,64 +3,35 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <signal.h>
- 
-static volatile int klaar = 0;
-
-// Handler voor SIGINT wordt aangeroepen bij indrukken ctrl-c
-void ctrl_c_handler(int signum)
-{
-	klaar = 1;
-	printf("\nSignaal %d (SIGINT) ontvangen\n", signum);
-}
-
-// Globale file descriptor
-static int fd = -1;
-
-// Handler voor SIGIO wordt aangeroepen bij interrupt op switches (opgaande flank)
-void sigio_handler(int signum) 
-{
-	printf("Signaal %d (SIGIO) ontvangen\n", signum);
-
-	if(fd < 0) {
-		fprintf(stderr, "ERROR: Device is not open\n");
-	}
-	else {
-		int buf;
-		read(fd, &buf, 1);
-		printf("switches = 0x%02X\n", buf);
-	}
-}
+#include <stdbool.h>
  
 int main()
 {
-	struct sigaction actie;
+	sigset_t signal_set;
  
-	// Handler voor SIGIO registreren
-	if (sigemptyset(&actie.sa_mask) < 0) {
+	// Maak een set van signals aan
+	if (sigemptyset(&signal_set) < 0) {
 		perror("sigemptyset");
 		exit(EXIT_FAILURE);
 	}
-	actie.sa_flags = (SA_RESTART);
-	actie.sa_handler = sigio_handler; //pointer naar signal routine
-	if (sigaction(SIGIO, &actie, NULL) < 0) {
-		perror("sigaction");
-		return EXIT_FAILURE;
+	// SIGINT wordt verstuurd bij indrukken ctrl-c
+	if (sigaddset(&signal_set, SIGINT) < 0) {
+		perror("sigaddset");
+		exit(EXIT_FAILURE);
 	}
-
-	// Handler voor SIGINT registreren
-	if (sigemptyset(&actie.sa_mask) < 0) {
-		perror("sigemptyset");
-		return EXIT_FAILURE;
+	// SIGIO wordt aangeroepen bij interrupt op switches (opgaande flank)
+	if (sigaddset(&signal_set, SIGIO) < 0) {
+		perror("sigaddset");
+		exit(EXIT_FAILURE);
 	}
-	actie.sa_flags = (SA_RESETHAND);
-	actie.sa_handler = ctrl_c_handler;
-	if (sigaction(SIGINT, &actie, NULL) < 0) {
-		perror("sigaction");
-		return EXIT_FAILURE;
+	// Block signals in signal_set (SIGINT en SIGIO) zodat we er in main op kunnen wachten
+	if (sigprocmask(SIG_BLOCK, &signal_set, NULL) < 0) {
+		perror("sigprocmask");
+		exit(EXIT_FAILURE);
 	}
 
 	// Device openen
-	fd = open("/dev/async_switches", O_RDONLY);
+	int fd = open("/dev/async_switches", O_RDONLY);
 	if(fd < 0) {
 		perror("open");
 		return EXIT_FAILURE;
@@ -87,7 +58,24 @@ int main()
 	}
 
 	printf("Wacht op signaal...\n");
-	while (!klaar);
+	bool klaar = false;
+	while (!klaar) {
+		int sig_number;
+		sigwait(&signal_set, &sig_number);
+		if (sig_number == SIGIO) {
+				ssize_t buf;
+				if (read(fd, &buf, 1) < 0) {
+					perror("read");
+					close(fd);
+					return EXIT_FAILURE;
+				}
+				printf("Signaal %d (SIGIO) ontvangen switches = 0x%02X\n", sig_number, buf);
+		}
+		else if (sig_number == SIGINT) {
+			printf("Signaal %d (SIGINT) ontvangen\n", sig_number);
+			klaar = true;
+		}
+	}
 
 	// Device sluiten
 	close(fd);
