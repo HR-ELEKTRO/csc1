@@ -3,23 +3,25 @@
 #include <linux/printk.h>
 #include <linux/io.h>
 
-static void *mem_ptr;
-static volatile unsigned char *led_ptr;
+static void __iomem *io_ptr;
 
 static int __init led_init(void) {
-	mem_ptr = ioremap(0xFF200010, 1);
-	if (mem_ptr == NULL) {
+	io_ptr = ioremap(0xFF200010, 4);
+	if (io_ptr == NULL) {
 		pr_err("ERROR: memory of device can not accessed\n");
 		return -ENOMEM;
 	}
-	led_ptr = mem_ptr;
-	*led_ptr |= 0x01; 
+	writel(readl(io_ptr) | (1<<0), io_ptr);
 	return 0;
 }
 
 static void __exit led_exit(void) {
-	*led_ptr &= ~0x01;
-	iounmap (mem_ptr);
+	writel(readl(io_ptr) & ~(1<<0), io_ptr);
+<<<<<<< HEAD
+	iounmap (io_ptr);
+=======
+	iounmap(io_ptr);
+>>>>>>> 2e0761b0d8e5226fbfb2ffc2c3ccb7dee630f4ea
 }
 
 module_init(led_init);
