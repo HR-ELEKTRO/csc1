@@ -17,11 +17,7 @@ static int __init led_init(void) {
 
 static void __exit led_exit(void) {
 	writel(readl(io_ptr) & ~(1<<0), io_ptr);
-<<<<<<< HEAD
-	iounmap (io_ptr);
-=======
 	iounmap(io_ptr);
->>>>>>> 2e0761b0d8e5226fbfb2ffc2c3ccb7dee630f4ea
 }
 
 module_init(led_init);
